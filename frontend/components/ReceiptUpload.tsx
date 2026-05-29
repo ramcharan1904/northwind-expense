@@ -61,7 +61,7 @@ export function ReceiptUpload({
   }
 
   return (
-    <div className="space-y-4 max-w-xl">
+    <div className="space-y-4 w-full max-w-xl">
       {/* Drop zone */}
       <div
         onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -86,7 +86,7 @@ export function ReceiptUpload({
         <div className="text-4xl mb-3">{file ? fileIcon : "📎"}</div>
         {file ? (
           <>
-            <p className="text-sm font-semibold text-gray-800">{file.name}</p>
+            <p className="text-sm font-semibold text-gray-800 break-all">{file.name}</p>
             <p className="text-xs text-gray-400 mt-1">{(file.size / 1024).toFixed(1)} KB · Click to change</p>
           </>
         ) : (
@@ -100,24 +100,24 @@ export function ReceiptUpload({
       {/* Actions */}
       {file && (
         <div className="flex items-center gap-3">
-          <button onClick={() => setFile(null)} className="btn-secondary">
+          <button onClick={() => setFile(null)} disabled={uploading} className="btn-secondary shrink-0">
             Remove
           </button>
           <button
             onClick={handleUpload}
             disabled={uploading}
-            className="btn-primary flex-1"
+            className="btn-primary min-w-0 flex-1 justify-center"
           >
             {uploading ? (
-              <span className="flex items-center gap-2">
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+              <>
+                <svg className="w-4 h-4 animate-spin shrink-0" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                 </svg>
-                Uploading &amp; Analyzing…
-              </span>
+                <span className="truncate">Uploading &amp; Analyzing…</span>
+              </>
             ) : (
-              "Upload & Analyze"
+              <span>Upload &amp; Analyze</span>
             )}
           </button>
         </div>
