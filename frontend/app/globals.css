@@ -1,3 +1,41 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@layer base {
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer components {
+  .input {
+    @apply w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white placeholder-gray-400
+           focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-blue-600 text-white text-sm
+           font-medium rounded-lg hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-white text-gray-700 text-sm
+           font-medium rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition-colors;
+  }
+  .btn-danger {
+    @apply inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-red-600 text-white text-sm
+           font-medium rounded-lg hover:bg-red-700 disabled:opacity-40 transition-colors;
+  }
+  .btn-success {
+    @apply inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-emerald-600 text-white text-sm
+           font-medium rounded-lg hover:bg-emerald-700 disabled:opacity-40 transition-colors;
+  }
+  .card {
+    @apply bg-white rounded-xl border border-gray-100 shadow-sm;
+  }
+  .label {
+    @apply block text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wide;
+  }
+}

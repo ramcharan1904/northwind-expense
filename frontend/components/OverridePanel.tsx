@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { api } from "@/lib/api";
+import { VerdictBadge } from "./VerdictBadge";
 
 const VERDICTS = ["compliant", "flagged", "rejected", "ambiguous"] as const;
 
@@ -24,8 +25,8 @@ export function OverridePanel({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!comment.trim()) { setError("Comment is required"); return; }
-    if (!email.trim()) { setError("Reviewer email is required"); return; }
+    if (!comment.trim()) { setError("A comment is required for all overrides."); return; }
+    if (!email.trim())   { setError("Reviewer email is required."); return; }
     setError("");
     setLoading(true);
     try {
@@ -44,72 +45,87 @@ export function OverridePanel({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-4 pt-4 border-t border-gray-200 space-y-3">
-      <div className="text-sm font-semibold text-gray-700">Override Verdict</div>
-
-      <div>
-        <label className="block text-xs text-gray-500 mb-1">New Verdict</label>
-        <select
-          value={newVerdict}
-          onChange={(e) => setNewVerdict(e.target.value)}
-          className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-        >
-          {VERDICTS.map((v) => (
-            <option key={v} value={v}>{v}</option>
-          ))}
-        </select>
+    <div className="mt-4 pt-4 border-t border-gray-100">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-gray-900">Override Verdict</h3>
+        <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 transition-colors">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
       </div>
 
-      <div className="flex gap-2">
-        <div className="flex-1">
-          <label className="block text-xs text-gray-500 mb-1">Your Email *</label>
-          <input
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="label">New Verdict</label>
+          <div className="flex gap-2 flex-wrap">
+            {VERDICTS.map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setNewVerdict(v)}
+                className={`transition-all ${newVerdict === v ? "ring-2 ring-blue-500 ring-offset-1 rounded-full" : "opacity-60 hover:opacity-90"}`}
+              >
+                <VerdictBadge verdict={v} size="md" />
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="label">Your Email *</label>
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="input"
+              placeholder="reviewer@northwind.com"
+            />
+          </div>
+          <div>
+            <label className="label">Your Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="input"
+              placeholder="Optional"
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="label">Justification * <span className="normal-case text-gray-400 font-normal">(required — stored in audit log)</span></label>
+          <textarea
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
             required
-            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-            placeholder="reviewer@example.com"
+            rows={3}
+            className="input resize-none"
+            placeholder="Explain why you're overriding this verdict…"
           />
         </div>
-        <div className="flex-1">
-          <label className="block text-xs text-gray-500 mb-1">Your Name</label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-            placeholder="Optional"
-          />
+
+        {error && (
+          <p className="text-xs text-red-600 flex items-center gap-1">
+            <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+            </svg>
+            {error}
+          </p>
+        )}
+
+        <div className="flex gap-2 justify-end pt-1">
+          <button type="button" onClick={onCancel} className="btn-secondary">
+            Cancel
+          </button>
+          <button type="submit" disabled={loading} className="btn-primary">
+            {loading ? "Saving…" : "Save Override"}
+          </button>
         </div>
-      </div>
-
-      <div>
-        <label className="block text-xs text-gray-500 mb-1">Comment * (required for all overrides)</label>
-        <textarea
-          value={comment}
-          onChange={(e) => setComment(e.target.value)}
-          required
-          rows={3}
-          className="w-full border border-gray-300 rounded px-2 py-1.5 text-sm"
-          placeholder="Explain why you're overriding this verdict..."
-        />
-      </div>
-
-      {error && <p className="text-xs text-red-600">{error}</p>}
-
-      <div className="flex gap-2 justify-end">
-        <button type="button" onClick={onCancel} className="text-xs px-3 py-1.5 border border-gray-300 rounded hover:bg-gray-50">
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={loading}
-          className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-        >
-          {loading ? "Saving..." : "Save Override"}
-        </button>
-      </div>
-    </form>
+      </form>
+    </div>
   );
 }
