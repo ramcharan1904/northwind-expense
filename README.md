@@ -1,6 +1,36 @@
 # Northwind Expense Review — AI-Assisted T&E Pre-Review System
 
-A full-stack system that lets finance reviewers upload employee receipts, automatically checks them against policy PDFs using RAG + Claude, returns structured compliance verdicts, and supports human overrides. Built as an interview case study.
+A full-stack system that lets finance reviewers upload employee receipts, automatically checks them against policy PDFs using RAG + GPT-4o, returns structured compliance verdicts, and supports human overrides with a full audit trail. Built as an interview case study.
+
+---
+
+## What We Built
+
+### 6 Core Capabilities — All Implemented
+
+| # | Capability | Status |
+|---|-----------|--------|
+| 1 | Create submissions, select or create employees | ✅ |
+| 2 | Upload receipts (PDF, JPG, PNG, TXT) with auto-extraction | ✅ |
+| 3 | AI pre-review: verdict, reasoning, citations, confidence | ✅ |
+| 4 | Human override with append-only audit trail | ✅ |
+| 5 | Submission history with filter by employee and status | ✅ |
+| 6 | Policy Q&A with grounded citations and refusal guard | ✅ |
+
+### Key Behaviours Implemented
+
+- **Duplicate draft prevention** — 409 if the same employee submits a draft for the same destination and dates
+- **Submission lifecycle enforced** — `draft → pending → reviewed → approved/rejected` with auto-transitions
+  - Moving to `pending` auto-advances to `reviewed` if all receipts already have verdicts
+  - Moving to `reviewed` is triggered automatically when the last receipt receives a verdict
+- **Human override is final** — overriding a verdict immediately resolves the submission status; no extra click needed
+  - Override to `rejected` → submission instantly `rejected`
+  - Override to `compliant` with no remaining rejections → submission instantly `approved`
+- **Approve button faded** (disabled with tooltip) when any receipt is `rejected` or `ambiguous`
+- **Backend enforces the same rule** — 422 if Approve is attempted via API with unresolved receipts
+- **Overriding after approval reverts to re-review** — the system recalculates immediately based on updated verdicts
+- **3-level citation validator** — exact match → rapidfuzz fuzzy → semantic cosine; confidence penalised per failed citation
+- **Policy Q&A refuses out-of-scope questions** — similarity threshold (0.45, calibrated for `text-embedding-3-small`) prevents hallucination
 
 ---
 
@@ -10,18 +40,17 @@ A full-stack system that lets finance reviewers upload employee receipts, automa
 - Docker + Docker Compose
 - Python 3.11+
 - Node.js 20+
-- Anthropic API key
-- OpenAI API key
+- OpenAI API key (used for both GPT-4o verdicts/extraction and `text-embedding-3-small` embeddings)
 
 ### 1. Configure environment
 
 ```bash
 cp .env.example .env
-# Edit .env — fill in ANTHROPIC_API_KEY and OPENAI_API_KEY at minimum
+# Edit .env — fill in OPENAI_API_KEY at minimum
 ```
 
 ```bash
-cp northwind-expense/frontend/.env.local.example northwind-expense/frontend/.env.local
+cp frontend/.env.local.example frontend/.env.local
 ```
 
 ### 2. Start the database
@@ -30,12 +59,12 @@ cp northwind-expense/frontend/.env.local.example northwind-expense/frontend/.env
 docker-compose up -d db
 ```
 
-This starts PostgreSQL 16 + pgvector and auto-runs the schema migrations (`001_schema.sql`, `003_views.sql`).
+Starts PostgreSQL 16 + pgvector on port 5433. Auto-runs `001_schema.sql` and `003_views.sql` on first boot.
 
 ### 3. Seed employees
 
 ```bash
-cd northwind-expense/backend
+cd backend
 pip install -r requirements.txt
 python scripts/seed_employees.py
 ```
@@ -45,21 +74,21 @@ Reads the 5 employee profiles from `case_study/submissions/*/employee_info.json`
 ### 4. Start the backend
 
 ```bash
-cd northwind-expense/backend
-uvicorn app.main:app --reload
+cd backend
+uvicorn app.main:app --port 8000
 ```
 
-On startup, `policy_ingestion.py` runs automatically — it parses and embeds all 8 policy PDFs into pgvector. Idempotent; safe to restart.
+On startup, policy ingestion runs automatically — parses and embeds all 8 policy PDFs (832 chunks) into pgvector. Idempotent; safe to restart.
 
 ### 5. Start the frontend
 
 ```bash
-cd northwind-expense/frontend
+cd frontend
 npm install
 npm run dev
 ```
 
-Open http://localhost:3000 — you're running.
+Open http://localhost:3000.
 
 ---
 
@@ -67,7 +96,7 @@ Open http://localhost:3000 — you're running.
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        Browser (Next.js 15)                      │
+│                     Browser (Next.js 15)                         │
 │  /submissions  /submissions/[id]  /history  /policy-qa           │
 └───────────────────────┬─────────────────────────────────────────┘
                         │ REST (JSON)
@@ -76,67 +105,86 @@ Open http://localhost:3000 — you're running.
 │                                                                   │
 │  POST /submissions/{id}/receipts  ← main pipeline trigger        │
 │    │                                                              │
-│    ├─ StorageService.upload()      → local/R2 (relative path)    │
-│    ├─ receipt_extraction.py        → PyMuPDF → Claude Vision      │
+│    ├─ StorageService.upload()      → local filesystem            │
+│    ├─ receipt_extraction.py        → PyMuPDF → GPT-4o Vision     │
 │    ├─ retrieval.py                 → pgvector cosine search       │
-│    ├─ verdict_engine.py            → Claude (schema-constrained)  │
+│    ├─ verdict_engine.py            → GPT-4o (schema-constrained) │
 │    └─ citation_validator.py        → L1/L2/L3 validation          │
 │                                                                   │
 │  POST /policy-qa                   → RAG Q&A with refusal guard  │
 │  POST /verdicts/{id}/override      → append-only audit trail     │
+│                            + immediate submission status resolve  │
 └───────────────────────┬─────────────────────────────────────────┘
                         │ asyncpg
 ┌───────────────────────▼─────────────────────────────────────────┐
-│            PostgreSQL 16 + pgvector                               │
+│            PostgreSQL 16 + pgvector (port 5433)                   │
 │  employees / submissions / receipts / receipt_extractions         │
-│  policy_documents / policy_chunks (Vector 1536)                   │
-│  verdicts / verdict_citations / overrides                         │
+│  policy_documents / policy_chunks (vector 1536)                   │
+│  verdicts / verdict_citations / overrides (append-only)           │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
+## LLM Stack
+
+| Purpose | Model |
+|---------|-------|
+| Receipt extraction (text) | GPT-4o (`gpt-4o`) |
+| Receipt extraction (image/scanned PDF) | GPT-4o Vision |
+| Policy verdict + reasoning | GPT-4o (`gpt-4o`) |
+| Policy Q&A | GPT-4o (`gpt-4o`) |
+| Embeddings (retrieval + citation semantic validation) | `text-embedding-3-small` (1536 dims) |
+
+All LLM calls go through `services/llm_client.py` — a single wrapper with tenacity retry (3 attempts, exponential backoff on rate limit / timeout / 5xx). Schema-constrained JSON output everywhere via Pydantic v2.
+
+---
+
 ## Design Decisions & Tradeoffs
 
-### Why PostgreSQL + pgvector instead of Pinecone or Chroma
+### Why PostgreSQL + pgvector instead of Pinecone
 
-pgvector keeps all state — relational and vector — in one ACID-transactional store. For a system where overrides, verdicts, and policy chunks all need to cohere, avoiding distributed state machines matters more than the ~5× throughput improvement you'd get from a dedicated vector DB at 10K QPM. The ivfflat index with `lists=100` is fast enough at this scale. Migration path to Pinecone is straightforward if throughput requirements change: swap `retrieval.py` to call Pinecone, keep everything else identical.
+pgvector keeps all state — relational and vector — in one ACID-transactional store. For a system where overrides, verdicts, and policy chunks all need to cohere, avoiding distributed state machines matters more than the throughput improvement you'd get from a dedicated vector DB at scale. Migration path to Pinecone is straightforward: swap `retrieval.py`, keep everything else identical.
 
-### Why PyMuPDF first, Claude Vision as fallback
+### Why PyMuPDF first, GPT-4o Vision as fallback
 
-Cost: PyMuPDF extraction costs $0. Claude Vision costs ~$0.003–0.015 per image page. Most corporate receipts are machine-generated PDFs with embedded text; PyMuPDF gets >95% of them. The fallback threshold is `< 50 chars of extracted text` — catches scanned PDFs and photos without over-using Vision. The extraction method is stored on each receipt so the eval harness can measure Vision usage.
+Cost: PyMuPDF extraction costs $0. GPT-4o Vision costs per image token. Most corporate receipts are machine-generated PDFs with embedded text — PyMuPDF gets the majority of them. The fallback threshold is `< 50 chars of extracted text`, which catches scanned PDFs and photos without over-using Vision. The extraction method is stored on each receipt (`pymupdf`, `gpt4o_vision`, `plaintext`).
 
 ### Why section-based chunking instead of token-based
 
-Policy PDFs are written in numbered sections (`§2.3 Meal Allowances`). Splitting on section boundaries keeps each chunk semantically coherent — a 300-token limit that cuts mid-clause makes retrieval much noisier. Section-aware chunking means fewer chunks are retrieved but each chunk is more relevant. The regex `r"(§\d+|^\d+\.\d+)"` handles both formats present in the Northwind policies.
+Policy PDFs are written in numbered sections (`§2.3 Meal Allowances`). Splitting on section boundaries keeps each chunk semantically coherent. Section-aware chunking means fewer chunks retrieved but each is more relevant. Result: 832 chunks across 38 documents from 8 PDFs.
 
-### Verdict classification logic (flagged vs. rejected vs. ambiguous)
+### Verdict classification logic
 
-The verdict engine prompt instructs Claude to distinguish:
-- **compliant** — receipt meets all applicable policy rules
-- **flagged** — policy rule applies and the expense is borderline or needs human review (e.g., meal near the cap, receipt amount doesn't match booking)
-- **rejected** — clear policy violation (e.g., alcohol on solo travel, personal expense claimed)
-- **ambiguous** — insufficient evidence to classify; policy may not cover this category
+The verdict engine instructs GPT-4o to distinguish:
+- **compliant** — meets all applicable policy rules
+- **flagged** — borderline or needs human review (near the cap, amount mismatch)
+- **rejected** — clear policy violation (alcohol on solo travel, personal expense)
+- **ambiguous** — insufficient evidence; policy may not cover this category
 
-Confidence is penalized (`-0.20` per citation) if citation validation fails, which can push a borderline case from `flagged` to `ambiguous`. This is intentional: surfacing uncertainty is better than confident wrong answers.
+Confidence is penalised (`-0.20` per citation) when citation validation fails — surfacing uncertainty is better than confident wrong answers.
 
 ### 3-level citation faithfulness validator
 
-LLMs frequently paraphrase rather than quote verbatim. A string equality check alone would reject ~40% of valid citations. The 3-level cascade:
+LLMs frequently paraphrase rather than quote verbatim. The 3-level cascade:
 
-1. **L1 — Exact match** (free, ~0ms): normalized substring check
-2. **L2 — Fuzzy match** (rapidfuzz, ~5ms): sliding sentence/bigram windows at 90 ratio threshold — catches minor wording variants
-3. **L3 — Semantic similarity** (~80ms, one OpenAI call): cosine similarity between quote and each chunk sentence — catches paraphrases like "not reimbursable during solo travel" ↔ "cannot expense alcohol when traveling alone"
+1. **L1 — Exact match** (free, ~0ms): normalised substring check
+2. **L2 — Fuzzy match** (rapidfuzz, ~5ms): sliding sentence/bigram windows at configurable ratio threshold
+3. **L3 — Semantic similarity** (~80ms, one OpenAI call): cosine similarity between quote and each chunk sentence — catches paraphrases
 
-Each citation row stores `quote_verbatim` (L1 pass) and `semantic_support` (L3 cosine score), enabling the eval harness to break down citation quality.
+Each citation row stores `quote_verbatim` (L1 pass) and `semantic_support` (L3 cosine score) for eval harness breakdown.
 
-### Confidence-aware refusal in Policy Q&A
+### Human override is final
 
-The system refuses to answer if `top_similarity < 0.75` (configurable via `POLICY_QA_MIN_SIMILARITY`). This means "I searched the policy documents and nothing is relevant enough" — the system returns a refusal message rather than hallucinating an answer. This is tested explicitly in the eval harness with out-of-scope questions (e.g., questions about HR processes not covered by T&E policies).
+When a reviewer overrides a verdict, it immediately re-evaluates all current verdicts for the submission and resolves the status — no extra Approve/Reject click required. The Approve button is disabled (faded with tooltip) when any receipt is `rejected` or `ambiguous`. The same rule is enforced server-side with a 422.
 
 ### Append-only override audit trail
 
-All overrides are enforced append-only at the database level via `CREATE RULE`. No application code can silently delete or update an override. The `current_verdicts` database view resolves the latest override for each receipt. This means the full audit trail is always preserved, and reviewers can see the original AI verdict alongside every human override.
+Overrides are enforced append-only at the database level via `CREATE RULE`. No application code can silently delete or update an override. The `current_verdicts` view resolves the latest override per receipt. The original AI verdict is always preserved.
+
+### Confidence-aware refusal in Policy Q&A
+
+The system refuses to answer if `top_similarity < 0.45` (configurable via `POLICY_QA_MIN_SIMILARITY`). Threshold is calibrated to `text-embedding-3-small` cosine similarity range (0.4–0.65 for relevant matches). Returns a clear refusal message with the actual similarity score rather than hallucinating an answer.
 
 ---
 
@@ -147,9 +195,9 @@ Assumptions: 5 receipts per submission, PDFs (PyMuPDF succeeds on 4, Vision need
 | Step | Model | Cost |
 |------|-------|------|
 | Receipt extraction × 4 (PyMuPDF) | — | $0 |
-| Receipt extraction × 1 (Claude Vision) | claude-sonnet-4-6 | ~$0.008 |
+| Receipt extraction × 1 (GPT-4o Vision) | gpt-4o | ~$0.005 |
 | Embeddings for retrieval × 5 receipts | text-embedding-3-small | ~$0.0001 |
-| Verdict generation × 5 receipts | claude-sonnet-4-6 | ~$0.04 |
+| Verdict generation × 5 receipts | gpt-4o | ~$0.04 |
 | Citation semantic validation (worst case) | text-embedding-3-small | ~$0.0005 |
 | **Total per submission** | | **~$0.05** |
 
@@ -158,37 +206,35 @@ Assumptions: 5 receipts per submission, PDFs (PyMuPDF succeeds on 4, Vision need
 ## Running the Eval Harness
 
 ```bash
-# After seeding + uploading all 5 case_study submissions via the API:
 python eval/eval.py --expected eval/expected_results.json --api-url http://localhost:8000
 ```
 
 Output includes:
 - Verdict accuracy per submission
 - Citation faithfulness breakdown (L1 exact / L2 fuzzy / L3 semantic / failed)
-- Retrieval precision@5 (did correct policy documents appear?)
+- Retrieval precision@5
 - Policy Q&A refusal rate on out-of-scope questions
-- Confidence calibration (high-confidence verdicts should be more accurate)
+- Confidence calibration
 
 ---
 
 ## Scaling to 10K Submissions/Day
 
-Current architecture processes receipts synchronously in the upload request (~3–8s per receipt depending on Vision usage). At 10K/day (avg 5 receipts = 50K extractions/day, ~35 QPS peak), synchronous processing would not hold.
+Current architecture processes receipts synchronously (~3–8s per receipt). At 10K/day peak:
 
-**Changes needed:**
-1. **Async job queue** — Move extraction + retrieval + verdict into ARQ (asyncio Redis Queue) workers. Upload endpoint returns 202 + job ID; frontend polls `GET /api/receipts/{id}/status`.
-2. **Horizontal FastAPI workers** — Stateless; run 4–8 uvicorn replicas behind nginx or a load balancer.
-3. **pgvector → Pinecone migration** — At ~1M+ policy chunks or high-QPS similarity search, swap `retrieval.py` to Pinecone. Schema and verdict engine are unaffected.
+1. **Async job queue** — Move extraction + retrieval + verdict into ARQ workers. Upload returns 202 + job ID; frontend polls status.
+2. **Horizontal FastAPI workers** — Stateless; run multiple uvicorn replicas behind a load balancer.
+3. **pgvector → Pinecone** — At ~1M+ chunks or high-QPS search, swap `retrieval.py`. Everything else unchanged.
 4. **R2 file storage** — Already abstracted behind `StorageService`; flip `STORAGE_BACKEND=r2` in `.env`.
-5. **Connection pooling** — Add PgBouncer in front of Postgres; increase `asyncpg` pool size.
+5. **PgBouncer** — Connection pooling in front of Postgres.
 
 ---
 
 ## What I'd Do Next
 
-- **Better prompt versioning** — track `prompt_version` across A/B experiments; log accuracy by version
-- **Feedback loop** — when a human overrides a verdict, log the (receipt, policy_chunks, ai_verdict, human_verdict) tuple for fine-tuning or few-shot prompt improvement
+- **Topic classifier on Policy Q&A** — small fine-tuned classifier to explicitly reject non-T&E questions before retrieval
 - **Multi-receipt cross-checks** — flag when total across all receipts in a submission exceeds the per-trip cap
-- **PDF receipt preview** in the UI (embed the streamed file in an iframe)
-- **Webhook on verdict** — notify the submitting employee via email when their submission is reviewed
-- **Rate limit by employee** to prevent accidental mass uploads during testing
+- **Feedback loop** — log (receipt, policy_chunks, ai_verdict, human_verdict) tuples for few-shot prompt improvement
+- **PDF preview in UI** — embed streamed file in an iframe on the receipt detail
+- **Webhook on verdict** — notify the submitting employee via email when reviewed
+- **Better prompt versioning** — A/B test prompt versions and track accuracy per version in the eval harness
