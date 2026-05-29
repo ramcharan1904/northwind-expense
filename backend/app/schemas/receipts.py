@@ -13,6 +13,7 @@ class ExtractionOutput(BaseModel):
     expense_date: str | None = None      # ISO date string
     description: str | None = None
     extraction_confidence: float = 0.5
+    cardholder_name: str | None = None   # name on card/receipt if present
 
 
 class ReceiptExtractionResponse(BaseModel):

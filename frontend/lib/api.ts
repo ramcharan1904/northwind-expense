@@ -114,10 +114,12 @@ export const api = {
   },
 
   submissions: {
-    list: (params?: { employee_id?: string; status?: string }) => {
+    list: (params?: { employee_id?: string; status?: string; date_from?: string; date_to?: string }) => {
       const qs = new URLSearchParams();
       if (params?.employee_id) qs.set("employee_id", params.employee_id);
       if (params?.status) qs.set("status", params.status);
+      if (params?.date_from) qs.set("date_from", params.date_from);
+      if (params?.date_to) qs.set("date_to", params.date_to);
       return apiFetch<Submission[]>(`/api/submissions${qs.toString() ? "?" + qs : ""}`);
     },
     get: (id: string) => apiFetch<Submission>(`/api/submissions/${id}`),

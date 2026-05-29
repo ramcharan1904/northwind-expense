@@ -18,6 +18,7 @@ Return exactly this JSON structure:
   "vendor": "<merchant name or null>",
   "category": "<one of: airfare, hotel, meal, ground_transportation, conference, other or null>",
   "expense_date": "<YYYY-MM-DD or null>",
+  "cardholder_name": "<name printed on card or receipt, or null if not present>",
   "description": "<brief description or null>",
   "extraction_confidence": <0.0 to 1.0>
 }"""

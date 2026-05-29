@@ -20,6 +20,8 @@ export default function HistoryPage() {
   const [error, setError] = useState("");
   const [filterEmployee, setFilterEmployee] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
 
   useEffect(() => {
     async function load() {
@@ -42,6 +44,8 @@ export default function HistoryPage() {
       const subs = await api.submissions.list({
         employee_id: filterEmployee || undefined,
         status: filterStatus || undefined,
+        date_from: filterDateFrom || undefined,
+        date_to: filterDateTo || undefined,
       });
       setSubmissions(subs);
     } catch (e: any) {
@@ -90,15 +94,39 @@ export default function HistoryPage() {
             ))}
           </select>
         </div>
+        <div className="flex-1 min-w-[140px]">
+          <label className="label">From</label>
+          <input
+            type="date"
+            value={filterDateFrom}
+            onChange={(e) => setFilterDateFrom(e.target.value)}
+            className="input"
+          />
+        </div>
+        <div className="flex-1 min-w-[140px]">
+          <label className="label">To</label>
+          <input
+            type="date"
+            value={filterDateTo}
+            onChange={(e) => setFilterDateTo(e.target.value)}
+            className="input"
+          />
+        </div>
         <button onClick={applyFilter} className="btn-primary">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
           </svg>
           Apply Filter
         </button>
-        {(filterEmployee || filterStatus) && (
+        {(filterEmployee || filterStatus || filterDateFrom || filterDateTo) && (
           <button
-            onClick={() => { setFilterEmployee(""); setFilterStatus(""); applyFilter(); }}
+            onClick={() => {
+              setFilterEmployee("");
+              setFilterStatus("");
+              setFilterDateFrom("");
+              setFilterDateTo("");
+              applyFilter();
+            }}
             className="btn-secondary"
           >
             Clear

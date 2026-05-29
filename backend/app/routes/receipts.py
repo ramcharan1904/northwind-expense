@@ -9,8 +9,8 @@ from app.database import get_db
 from app.models.submissions import Submission
 from app.models.receipts import Receipt, ReceiptExtraction
 from app.models.employees import Employee
-from app.models.verdicts import Verdict
-from app.schemas.receipts import ReceiptResponse
+from app.models.verdicts import Verdict, VerdictCitation
+from app.schemas.receipts import ReceiptResponse, ExtractionOutput
 from app.services.storage import storage_service
 from app.services.receipt_extraction import extract_receipt
 from app.services.retrieval import retrieve_policy_chunks
@@ -105,6 +105,37 @@ async def upload_receipt(
         "destination": submission.destination,
     }
 
+    # Employee ownership check — if receipt has a cardholder name that clearly
+    # doesn't belong to the submission's employee, reject immediately.
+    mismatch_reason = _check_employee_mismatch(
+        extraction_output, employee.name if employee else None
+    )
+    if mismatch_reason:
+        logger.warning("receipt_employee_mismatch", extra={
+            "receipt_id": str(receipt.id),
+            "submission_employee": employee.name if employee else None,
+            "cardholder_name": extraction_output.cardholder_name,
+        })
+        verdict = Verdict(
+            receipt_id=receipt.id,
+            submission_id=submission_id,
+            verdict="rejected",
+            confidence=0.99,
+            reasoning=mismatch_reason,
+            model_used="system",
+            prompt_version="ownership_check_v1",
+            retrieval_score=None,
+        )
+        db.add(verdict)
+        await db.flush()
+
+        if submission.status == "pending":
+            await _maybe_auto_review(db, submission)
+        await db.flush()
+
+        result = await db.execute(select(Receipt).where(Receipt.id == receipt.id))
+        return result.scalar_one()
+
     # Retrieve relevant policy chunks
     receipt_text = raw_text or str(extraction_output.model_dump())
     chunks = await retrieve_policy_chunks(db, receipt_text, employee_context)
@@ -177,3 +208,31 @@ async def _maybe_auto_review(db: AsyncSession, submission: Submission) -> None:
     if len(verdicts) >= len(receipts):
         submission.status = "reviewed"
         logger.info("submission_auto_reviewed", extra={"submission_id": str(submission.id)})
+
+
+def _check_employee_mismatch(extraction: ExtractionOutput, employee_name: str | None) -> str | None:
+    """Return a rejection reason if the receipt's cardholder clearly doesn't match the employee.
+    Returns None when names match or when there's insufficient data to make a determination.
+    """
+    if not extraction.cardholder_name or not employee_name:
+        return None  # can't compare — don't reject on uncertainty
+
+    from rapidfuzz import fuzz
+    cardholder = extraction.cardholder_name.strip().lower()
+    employee = employee_name.strip().lower()
+
+    # Exact or very close match → no mismatch
+    if fuzz.ratio(cardholder, employee) >= 75:
+        return None
+
+    # Check if any word in employee name appears in cardholder (handles "Sarah Chen" vs "S. Chen")
+    employee_parts = [p for p in employee.split() if len(p) > 1]
+    matches = sum(1 for part in employee_parts if part in cardholder)
+    if matches >= 1 and len(employee_parts) > 0:
+        return None
+
+    return (
+        f"Receipt rejected: cardholder name '{extraction.cardholder_name}' does not match "
+        f"the submission employee '{employee_name}'. Receipts must belong to the submitting employee. "
+        f"Please upload receipts belonging to {employee_name} only."
+    )

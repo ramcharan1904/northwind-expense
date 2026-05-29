@@ -1,5 +1,6 @@
 import logging
 import uuid
+from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, text
@@ -20,6 +21,8 @@ router = APIRouter(prefix="/api/submissions", tags=["submissions"])
 async def list_submissions(
     employee_id: uuid.UUID | None = Query(None),
     status: str | None = Query(None),
+    date_from: date | None = Query(None, description="Filter submissions created on or after this date (YYYY-MM-DD)"),
+    date_to: date | None = Query(None, description="Filter submissions created on or before this date (YYYY-MM-DD)"),
     db: AsyncSession = Depends(get_db),
 ):
     q = select(Submission).order_by(Submission.created_at.desc())
@@ -27,6 +30,13 @@ async def list_submissions(
         q = q.where(Submission.employee_id == employee_id)
     if status:
         q = q.where(Submission.status == status)
+    if date_from:
+        q = q.where(Submission.created_at >= date_from)
+    if date_to:
+        from datetime import datetime, timezone, timedelta
+        # include the full day by going to end-of-day
+        end_of_day = datetime.combine(date_to, datetime.max.time()).replace(tzinfo=timezone.utc)
+        q = q.where(Submission.created_at <= end_of_day)
     result = await db.execute(q)
     return result.scalars().all()
 
