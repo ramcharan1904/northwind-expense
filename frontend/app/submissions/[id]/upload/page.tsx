@@ -30,10 +30,12 @@ export default function UploadPage() {
         </p>
       </div>
 
-      <ReceiptUpload
-        submissionId={id}
-        onSuccess={() => router.push(`/submissions/${id}`)}
-      />
+      <div className="flex justify-center">
+        <ReceiptUpload
+          submissionId={id}
+          onSuccess={() => router.push(`/submissions/${id}`)}
+        />
+      </div>
     </div>
   );
 }
