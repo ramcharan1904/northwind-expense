@@ -1,0 +1,40 @@
+[
+  {
+    "type": "verdict",
+    "description": "01_clean_denver — United Airlines flight (economy domestic, dates match, corporate card)",
+    "verdict_id": "__REPLACE_AFTER_SUBMISSION__",
+    "expected_verdict": "compliant",
+    "expected_citations": ["TEP-005"]
+  },
+  {
+    "type": "verdict",
+    "description": "01_clean_denver — Marriott Denver hotel (within Tier 2 cap of $250/night)",
+    "verdict_id": "__REPLACE_AFTER_SUBMISSION__",
+    "expected_verdict": "compliant",
+    "expected_citations": ["TEP-004"]
+  },
+  {
+    "type": "verdict",
+    "description": "03_dinner_over_cap — Alinea dinner (high-end restaurant, likely over $75 dinner cap)",
+    "verdict_id": "__REPLACE_AFTER_SUBMISSION__",
+    "expected_verdict": "rejected",
+    "expected_citations": ["TEP-002"]
+  },
+  {
+    "type": "verdict",
+    "description": "04_alcohol_solo_travel — Franklin BBQ dinner (solo travel, check if alcohol on receipt)",
+    "verdict_id": "__REPLACE_AFTER_SUBMISSION__",
+    "expected_verdict": "rejected",
+    "expected_citations": ["TEP-003"]
+  },
+  {
+    "type": "refusal",
+    "description": "Out-of-scope question — should refuse",
+    "question": "What is the company's policy on hiring contractors from overseas?"
+  },
+  {
+    "type": "refusal",
+    "description": "Out-of-scope question — should refuse",
+    "question": "How do I apply for parental leave?"
+  }
+]

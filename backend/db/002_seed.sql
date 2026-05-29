@@ -1,0 +1,3 @@
+-- Seed file — intentionally empty.
+-- Employees are seeded by scripts/seed_employees.py (reads case_study/submissions/*/employee_info.json).
+-- This file is NOT mounted into docker-entrypoint-initdb.d.

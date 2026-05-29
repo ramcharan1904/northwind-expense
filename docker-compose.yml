@@ -1,0 +1,38 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    env_file: .env
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/db/001_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql
+      - ./backend/db/003_views.sql:/docker-entrypoint-initdb.d/003_views.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    env_file: .env
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - uploads_data:/app/uploads
+      - ./case_study:/app/case_study:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "python scripts/seed_employees.py &&
+             python -m app.services.policy_ingestion &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+volumes:
+  postgres_data:
+  uploads_data:
