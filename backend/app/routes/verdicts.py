@@ -12,6 +12,28 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api", tags=["verdicts"])
 
 
+@router.get("/verdicts/{verdict_id}", response_model=VerdictResponse)
+async def get_verdict(verdict_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    result = await db.execute(
+        text("""
+            SELECT cv.*, r.file_name
+            FROM current_verdicts cv
+            JOIN receipts r ON r.id = cv.receipt_id
+            WHERE cv.verdict_id = :verdict_id
+        """),
+        {"verdict_id": str(verdict_id)},
+    )
+    row = result.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Verdict not found")
+
+    v = await db.get(Verdict, verdict_id)
+    resp = VerdictResponse.model_validate(v)
+    resp.current_verdict = row.current_verdict
+    resp.is_overridden = row.is_overridden
+    return resp
+
+
 @router.get("/submissions/{submission_id}/verdicts", response_model=list[VerdictResponse])
 async def list_submission_verdicts(
     submission_id: uuid.UUID,

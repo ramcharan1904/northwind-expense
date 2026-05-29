@@ -2,28 +2,28 @@
   {
     "type": "verdict",
     "description": "01_clean_denver — United Airlines flight (economy domestic, dates match, corporate card)",
-    "verdict_id": "__REPLACE_AFTER_SUBMISSION__",
+    "verdict_id": "90447cec-a1a1-4c4f-a530-c2f8d2d79143",
     "expected_verdict": "compliant",
     "expected_citations": ["TEP-005"]
   },
   {
     "type": "verdict",
     "description": "01_clean_denver — Marriott Denver hotel (within Tier 2 cap of $250/night)",
-    "verdict_id": "__REPLACE_AFTER_SUBMISSION__",
+    "verdict_id": "3d362727-a484-4ddd-bb20-522a27e0a56e",
     "expected_verdict": "compliant",
     "expected_citations": ["TEP-004"]
   },
   {
     "type": "verdict",
-    "description": "03_dinner_over_cap — Alinea dinner (high-end restaurant, likely over $75 dinner cap)",
-    "verdict_id": "__REPLACE_AFTER_SUBMISSION__",
+    "description": "03_dinner_over_cap — Alinea dinner (high-end restaurant, over $75 dinner cap)",
+    "verdict_id": "b9ac30ba-8cbd-49eb-b0a5-1d995ace7287",
     "expected_verdict": "rejected",
     "expected_citations": ["TEP-002"]
   },
   {
     "type": "verdict",
-    "description": "04_alcohol_solo_travel — Franklin BBQ dinner (solo travel, check if alcohol on receipt)",
-    "verdict_id": "__REPLACE_AFTER_SUBMISSION__",
+    "description": "04_alcohol_solo_travel — Franklin BBQ dinner (solo travel, alcohol on receipt)",
+    "verdict_id": "7c43ea19-a05b-4b28-93af-b8ea081401a7",
     "expected_verdict": "rejected",
     "expected_citations": ["TEP-003"]
   },

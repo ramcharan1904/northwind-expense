@@ -109,7 +109,7 @@ async def upload_receipt(
     receipt_text = raw_text or str(extraction_output.model_dump())
     chunks = await retrieve_policy_chunks(db, receipt_text, employee_context)
 
-    # Generate verdict
+    # Generate verdict (pass raw_text so LLM can see line-item detail)
     verdict = await generate_verdict(
         db=db,
         receipt_id=receipt.id,
@@ -117,6 +117,7 @@ async def upload_receipt(
         employee=employee_context,
         extraction=extraction_output,
         chunks=chunks,
+        raw_text=raw_text or None,
     )
 
     # Auto-transition pending → reviewed if all receipts now have verdicts

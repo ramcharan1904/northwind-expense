@@ -12,22 +12,41 @@ from app.config import get_settings
 logger = logging.getLogger(__name__)
 settings = get_settings()
 
-PROMPT_VERSION = "v1"
+PROMPT_VERSION = "v3"
 
 VERDICT_SYSTEM = """You are an expert expense compliance reviewer for Northwind Logistics.
 Your job is to review a single expense receipt against company policy and return a structured verdict.
 
-Verdicts:
-- compliant: Receipt clearly meets all applicable policies
-- flagged: Receipt likely violates a policy but requires human review (e.g., borderline amounts, missing context)
-- rejected: Receipt clearly violates one or more policies (e.g., alcohol on solo travel, over hard caps)
-- ambiguous: Insufficient information to make a confident determination
+VERDICT DEFINITIONS — apply these precisely:
+- compliant: Receipt meets all applicable policies. Amount is within cap, no prohibited items, no policy concern.
+- flagged: Receipt MIGHT violate policy — use when you need more information. Examples: non-itemised receipt on solo travel (cannot confirm no alcohol), amount borderline within 5% of cap.
+- rejected: Receipt CLEARLY violates policy. Use ONLY when:
+  * The computed amount explicitly EXCEEDS a stated hard cap (total ÷ nights > cap, or meal total > meal cap).
+  * Alcohol charges are explicitly listed on a solo travel receipt.
+  * Expense category is explicitly prohibited by policy.
+  * DO NOT reject if the amount is within cap — within cap means compliant, period.
+- ambiguous: ONLY when policy does not cover this category at all, or the receipt is so incomplete that no category can be determined.
+
+HOTEL CAP RULE — follow this exactly:
+1. Compute: nightly_rate = total_amount ÷ number_of_nights (use 1 if nights unknown).
+2. Compare nightly_rate to the destination tier cap stated in policy.
+3. If nightly_rate > cap → rejected (clear cap violation).
+4. If nightly_rate ≤ cap → compliant. STOP. Do NOT look for other reasons to reject or flag.
+5. If you cannot determine the cap from the retrieved policy chunks → ambiguous.
+EXAMPLE: $470 total for 2 nights = $235/night. if total>$235/night reject if you have concrete evidence else flag it ambigous.
+
+SOLO TRAVEL RULE — apply when trip_purpose indicates a single traveller:
+1. If the receipt EXPLICITLY lists alcohol charges → rejected.
+2. If the receipt is from a restaurant that typically serves alcohol AND the receipt is non-itemised → flagged (cannot verify no alcohol was ordered).
+3. If the receipt is from a restaurant and the meal total is within the meal cap and no alcohol concern → compliant.
+IMPORTANT: "any restaurants with bar facilities and if alcohol is served, and similar establishments that serve alcohol with meals are subject to rule (2) above when the traveller is solo and the receipt is not itemised. Apply flagged or rejected, not compliant.
 
 CRITICAL RULES:
 1. Return valid JSON only — no explanation outside the JSON
-2. Quoted text in cited_clauses MUST be the exact wording from the provided policy chunks
-3. If you are not confident, prefer ambiguous over a wrong confident answer
-4. Always include the policy document ID and section for each citation
+2. Quoted text in cited_clauses MUST be exact wording from the provided policy chunks
+3. Always include the policy document ID and section for each citation
+4. Within-cap hotel stays are COMPLIANT — never reject a receipt that is within the policy limit
+5. Solo travel + non-itemised restaurant receipt = FLAGGED at minimum, never compliant
 
 Return exactly this JSON:
 {
@@ -44,10 +63,15 @@ def _build_verdict_prompt(
     employee: dict,
     extraction: ExtractionOutput,
     chunks: list[RetrievedChunk],
+    raw_text: str | None = None,
 ) -> str:
     policy_context = "\n\n".join(
         f"[{c.doc_id} {c.section or ''}] (similarity: {c.similarity:.2f})\n{c.content}"
         for c in chunks
+    )
+    raw_section = (
+        f"\nRAW RECEIPT TEXT (authoritative — use this for line-item detail):\n{raw_text[:1500]}\n"
+        if raw_text else ""
     )
     return f"""EMPLOYEE CONTEXT:
 Name: {employee.get('name')}
@@ -64,7 +88,7 @@ Category: {extraction.category}
 Date: {extraction.expense_date}
 Description: {extraction.description}
 Extraction confidence: {extraction.extraction_confidence}
-
+{raw_section}
 RELEVANT POLICY CHUNKS:
 {policy_context}
 
@@ -78,6 +102,7 @@ async def generate_verdict(
     employee: dict,
     extraction: ExtractionOutput,
     chunks: list[RetrievedChunk],
+    raw_text: str | None = None,
 ) -> Verdict:
     """Run the full verdict pipeline: LLM → citation validation → persist."""
     top_score = max((c.similarity for c in chunks), default=0.0)
@@ -85,7 +110,7 @@ async def generate_verdict(
     try:
         output: VerdictOutput = await call_claude_structured(
             system_prompt=VERDICT_SYSTEM,
-            user_prompt=_build_verdict_prompt(employee, extraction, chunks),
+            user_prompt=_build_verdict_prompt(employee, extraction, chunks, raw_text),
             response_schema=VerdictOutput,
             context={"receipt_id": str(receipt_id)},
             prompt_version=PROMPT_VERSION,
@@ -133,7 +158,7 @@ async def generate_verdict(
         verdict=output.verdict,
         confidence=output.confidence,
         reasoning=output.reasoning,
-        model_used=settings.anthropic_model,
+        model_used=settings.openai_model,
         prompt_version=PROMPT_VERSION,
         retrieval_score=round(top_score, 3),
     )

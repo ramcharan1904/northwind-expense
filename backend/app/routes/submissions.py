@@ -46,7 +46,7 @@ async def create_submission(body: SubmissionCreate, db: AsyncSession = Depends(g
             Submission.trip_end == body.trip_end,
         )
     )
-    if existing.scalar_one_or_none():
+    if existing.scalars().first():
         raise HTTPException(
             status_code=409,
             detail="A draft submission already exists for this employee with the same destination and trip dates.",
