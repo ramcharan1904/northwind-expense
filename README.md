@@ -1,6 +1,6 @@
 # Northwind Expense Review — AI-Assisted T&E Pre-Review System
 
-A full-stack system that lets finance reviewers upload employee receipts, automatically checks them against policy PDFs using RAG + GPT-4o, returns structured compliance verdicts, and supports human overrides with a full audit trail. Built as an interview case study.
+A full-stack system that lets finance reviewers upload employee receipts, automatically checks them against policy PDFs using RAG + GPT-4o, returns structured compliance verdicts, and supports human overrides with a full audit trail.
 
 ---
 
